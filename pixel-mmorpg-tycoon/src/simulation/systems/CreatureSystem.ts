@@ -35,6 +35,14 @@ export class CreatureSystem implements SimulationSystem {
 
       let target = a.targetId ? mgr.actors.get(a.targetId) : undefined;
       if (target && !isAlive(target)) target = undefined;
+      // Prey that reached a town or safe zone is out of reach: go home.
+      if (target && this.safe(target)) {
+        target = undefined;
+        a.lastAttackerId = null;
+        a.state = 'return';
+        const p = mgr.randomTileInArea(area);
+        if (p) mgr.goTo(a, p.x, p.y);
+      }
       if (!target) a.targetId = null;
       const attacker = a.lastAttackerId ? mgr.actors.get(a.lastAttackerId) : undefined;
 
@@ -43,7 +51,7 @@ export class CreatureSystem implements SimulationSystem {
         target = this.findPrey(a, tpl.aggroRange);
         if (target) a.targetId = target.id;
       }
-      if (!target && tpl.aggression === 'defensive' && attacker && isAlive(attacker)) {
+      if (!target && tpl.aggression === 'defensive' && attacker && isAlive(attacker) && !this.safe(attacker)) {
         target = attacker;
         a.targetId = attacker.id;
       }
@@ -104,7 +112,7 @@ export class CreatureSystem implements SimulationSystem {
     const mgr = this.mgr;
     const home = { x: area.x + area.w / 2, y: area.y + area.h / 2 };
     const leash = Math.max(area.w, area.h) / 2 + 7;
-    const inReach = (o: Actor) => isAlive(o) && dist(o, home) <= leash;
+    const inReach = (o: Actor) => isAlive(o) && dist(o, home) <= leash && !this.safe(o);
     let target = a.targetId ? mgr.actors.get(a.targetId) : undefined;
     if (target && !inReach(target)) target = undefined;
     if (!target || tick >= a.nextThink) {
@@ -156,13 +164,18 @@ export class CreatureSystem implements SimulationSystem {
     engage(mgr, a, target, stats);
   }
 
+  /** Standing in a town or safe zone: monsters won't attack. */
+  private safe(o: Actor): boolean {
+    return this.mgr.world.safeAt(Math.floor(o.x), Math.floor(o.y));
+  }
+
   private findPrey(a: Actor, range: number, ok?: (o: Actor) => boolean): Actor | undefined {
     this.near.length = 0;
     this.mgr.spatial.query(a.x, a.y, range, this.near);
     let best: Actor | undefined;
     let bestD = Infinity;
     for (const o of this.near) {
-      if (o.kind === 'creature' || !isAlive(o) || (ok && !ok(o))) continue;
+      if (o.kind === 'creature' || !isAlive(o) || (ok && !ok(o)) || this.safe(o)) continue;
       const d = dist(a, o);
       if (d < bestD) { bestD = d; best = o; }
     }

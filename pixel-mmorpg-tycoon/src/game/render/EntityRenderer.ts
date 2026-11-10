@@ -1,3 +1,4 @@
+import { getZone } from '@/data/zones';
 import Phaser from 'phaser';
 import { canvasFont, onLangChange, t } from '@/i18n';
 import { getCreatureType } from '@/data/creatureTypes';
@@ -82,6 +83,7 @@ export class EntityRenderer {
         this.overlaysDirty = true;
       }),
       rt.events.on('map:replaced', () => { this.objectsDirty = true; this.overlaysDirty = true; }),
+      rt.events.on('zones:changed', () => { this.overlaysDirty = true; }),
       onLangChange(() => this.applyFont()),
       session.actors.events.on('hit', ({ target, amount, attacker }) => {
         this.spawnFloat(target.x * S, (target.y - 0.6) * S, `-${amount}`, attacker.kind === 'npc' ? '#ffe08a' : '#ff7a6a');
@@ -131,7 +133,7 @@ export class EntityRenderer {
         if (a && this.onScreen(a.x, a.y)) audio.play('quest');
       }),
       useEditorStore.subscribe((s, p) => {
-        if (s.selection !== p.selection || s.tab !== p.tab) this.overlaysDirty = true;
+        if (s.selection !== p.selection || s.tab !== p.tab || s.tool !== p.tool || s.section !== p.section) this.overlaysDirty = true;
       }),
     );
   }
@@ -414,6 +416,23 @@ export class EntityRenderer {
     const sel = ed.selection;
     const isSel = (col: string, id: string) => sel?.col === col && sel.ids.includes(id);
 
+    // Painted zones: tinted tiles, merged into runs per row.
+    const zoneTool = ed.tool === 'zone' || ed.section === 'zones';
+    if (show || zoneTool) {
+      const z = rt.zones;
+      for (let y = 0; y < z.height; y++) {
+        let x = 0;
+        while (x < z.width) {
+          const v = z.tiles[z.index(x, y)];
+          if (!v) { x++; continue; }
+          let e = x + 1;
+          while (e < z.width && z.tiles[z.index(e, y)] === v) e++;
+          const def = getZone(v);
+          if (def) g.fillStyle(def.color, zoneTool ? 0.3 : 0.14).fillRect(x * S, y * S, (e - x) * S, S);
+          x = e;
+        }
+      }
+    }
     if (show || ed.tool === 'region' || sel?.col === 'regions') {
       for (const r of rt.entities.list('regions')) {
         const c = getRegionType(r.type).color;

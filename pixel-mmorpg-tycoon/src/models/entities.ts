@@ -97,6 +97,8 @@ export interface SpawnArea {
   w: number;
   h: number;
   maxCount: number;
+  /** Made by the monster-zone brush (removed when the zone is erased). */
+  zone?: boolean;
   /** Created by a world event; removed when the event ends (free of charge). */
   eventId?: EntityId;
   /** Boss lair: one boss that stays home, respawns slowly and needs a raid. */

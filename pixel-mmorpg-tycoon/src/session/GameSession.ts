@@ -1,3 +1,4 @@
+import { ZonePainter } from '@/systems/editor/ZonePainter';
 import { FEATURES } from '@/data/progression';
 import { EventBus } from '@/core/EventBus';
 import { t } from '@/i18n';
@@ -70,6 +71,7 @@ export class GameSession {
   readonly engine: SimulationEngine;
   readonly history: History;
   readonly painter: TerrainPainter;
+  readonly zonePainter: ZonePainter;
   readonly entities: EntityEditor;
   readonly actors: ActorManager;
   readonly economy: EconomyService;
@@ -107,6 +109,7 @@ export class GameSession {
     this.history = new History(200, () => useEditorStore.getState().setHistoryFlags(this.history.canUndo, this.history.canRedo));
     this.painter = new TerrainPainter(() => this.runtime, this.history);
     this.entities = new EntityEditor(() => this.runtime, this.history);
+    this.zonePainter = new ZonePainter(() => this.runtime, this.history, this.entities);
     this.studio = new StudioService(this.runtime);
     if (this.studio.standard) {
       this.entities.budget = this.studio;

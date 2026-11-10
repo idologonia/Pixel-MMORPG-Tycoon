@@ -1,3 +1,5 @@
+import { BIOMES } from '@/data/biomes';
+import { ZONES } from '@/data/zones';
 import { CAMPAIGNS, FEATURES, STAFF } from '@/data/progression';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -46,6 +48,9 @@ export function sourceKeys(dir = join(__dirname, '../src')): Set<string> {
 export function dynamicKeys(): Set<string> {
   const k = new Set<string>();
   TERRAINS.forEach((x) => k.add(x.name));
+  BIOMES.forEach((x) => k.add(x.name));
+  ZONES.forEach((x) => { k.add(x.name); k.add(x.hint); });
+  k.add('Zones');
   FEATURES.forEach((x) => { k.add(x.name); k.add(x.hint); });
   Object.values(STAFF).forEach((x) => { k.add(x.name); k.add(x.hint); });
   CAMPAIGNS.forEach((x) => k.add(x.name));

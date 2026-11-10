@@ -7,6 +7,8 @@ import { getBossPreset, LAIR_SIZE } from '@/data/bossTypes';
 import { getRegionType } from '@/data/regionTypes';
 import { ENTERABLE } from '@/data/furniture';
 import { TILE_SIZE } from '@/data/terrain';
+import { getBiome, pickObject } from '@/data/biomes';
+import { getZone } from '@/data/zones';
 import type { GameSession } from '@/session/GameSession';
 import { displayName } from '@/simulation/actors/combat';
 import type { Selection } from '@/systems/editor/EntityEditor';
@@ -115,6 +117,18 @@ export class MapTools {
         this.session.painter.beginStroke(ed.terrain);
         this.session.painter.strokeTo(t.x, t.y, ed.brushSize, ed.brushShape);
         break;
+      case 'scatter':
+        this.scattering = true;
+        this.strokeKey = `scatter-${Date.now()}`;
+        this.scattered.clear();
+        if (ed.biomeGround) { this.painting = true; this.session.painter.beginStroke(getBiome(ed.biome).terrain); this.session.painter.strokeTo(t.x, t.y, ed.brushSize, ed.brushShape); }
+        this.scatterAt(t.x, t.y);
+        break;
+      case 'zone':
+        this.zoning = true;
+        this.session.zonePainter.begin(ed.zone);
+        this.session.zonePainter.strokeTo(t.x, t.y, ed.brushSize, ed.brushShape);
+        break;
       case 'fill':
         if (inMap) this.session.painter.fill(t.x, t.y, ed.terrain);
         break;
@@ -217,6 +231,31 @@ export class MapTools {
     }
   }
   private lastBudgetToast: string | null = null;
+  private scattering = false;
+  private zoning = false;
+  private scattered = new Set<number>();
+
+  /** Scatter brush: drop biome objects on some of the tiles under the brush (each tile once per stroke). */
+  private scatterAt(tx: number, ty: number): void {
+    const ed = useEditorStore.getState();
+    const grid = this.rt.grid;
+    const b = getBiome(ed.biome);
+    const rand = () => this.session.actors.rand();
+    for (const [dx, dy] of brushFootprint(ed.brushSize, ed.brushShape)) {
+      const x = tx + dx, y = ty + dy;
+      if (!grid.inBounds(x, y)) continue;
+      const i = grid.index(x, y);
+      if (this.scattered.has(i)) continue;
+      this.scattered.add(i);
+      if (rand() >= ed.density) continue;
+      const kind = pickObject(b, rand());
+      // Keep a free tile around blocking objects so the forest stays walkable.
+      if (getObjectDef(kind)?.blocks && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([ax, ay]) => this.rt.objectIndex.objectAt(x + ax, y + ay))) continue;
+      this.session.entities.lastError = null;
+      this.session.entities.placeObject(kind, x, y, this.strokeKey ?? undefined);
+      if (this.session.entities.lastError && this.lastBudgetToast !== this.session.entities.lastError) { toast(this.session.entities.lastError, 'error'); this.lastBudgetToast = this.session.entities.lastError; }
+    }
+  }
 
   // ------------------------------------------------------------- move
   private onMove(p: Phaser.Input.Pointer): void {
@@ -224,6 +263,8 @@ export class MapTools {
     const ed = useEditorStore.getState();
     const down = p.leftButtonDown() && !this.cam.spaceHeld;
     if (this.painting && down) this.session.painter.strokeTo(t.x, t.y, ed.brushSize, ed.brushShape);
+    if (this.scattering && down) this.scatterAt(t.x, t.y);
+    if (this.zoning && down) this.session.zonePainter.strokeTo(t.x, t.y, ed.brushSize, ed.brushShape);
     if (down && ed.tool === 'place-object' && this.strokeKey) {
       const d = getObjectDef(ed.objectKind);
       if (d && d.w === 1 && d.h === 1) this.placeAt(t.x, t.y);
@@ -283,6 +324,11 @@ export class MapTools {
     if (this.painting) {
       this.painting = false;
       this.session.painter.endStroke(tr('Paint'));
+    }
+    if (this.scattering) { this.scattering = false; audio.play('place'); }
+    if (this.zoning) {
+      this.zoning = false;
+      this.session.zonePainter.end(ed.zoneTemplate, this.session.players.spawnPoint());
     }
     this.strokeKey = null;
     this.lastBudgetToast = null;
@@ -396,8 +442,10 @@ export class MapTools {
     if (!grid.inBounds(tx, ty)) return;
 
     switch (ed.tool) {
-      case 'brush': {
-        g.fillStyle(0xffffff, 0.18);
+      case 'brush':
+      case 'scatter':
+      case 'zone': {
+        g.fillStyle(ed.tool === 'zone' ? (getZone(ed.zone)?.color ?? 0xffffff) : 0xffffff, ed.tool === 'zone' ? 0.35 : 0.18);
         for (const [dx, dy] of brushFootprint(ed.brushSize, ed.brushShape)) g.fillRect((tx + dx) * S, (ty + dy) * S, S, S);
         const half = Math.floor((ed.brushSize - 1) / 2);
         g.lineStyle(2, 0xffe08a, 1).strokeRect((tx - half) * S, (ty - half) * S, ed.brushSize * S, ed.brushSize * S);

@@ -63,7 +63,10 @@ export class PlayerBrain {
    * "flagged" (only PvP-minded players attack) — including land outside regions.
    */
   pvpRule(x: number, y: number): PvpRule {
-    let rule: PvpRule = 'flagged';
+    // Painted zones win: towns and safe zones are peaceful, PvP zones are battlegrounds.
+    const z = this.world.zoneAt(x, y);
+    if (z === 1 || z === 2) return 'none';
+    let rule: PvpRule = z === 4 ? 'open' : 'flagged';
     for (const r of this.world.entities.list('regions')) {
       if (x < r.x || y < r.y || x >= r.x + r.w || y >= r.y + r.h) continue;
       const def = getRegionType(r.type);
@@ -77,13 +80,15 @@ export class PlayerBrain {
 
   /** May player `p` attack another player standing at (x, y)? */
   mayAttack(p: PlayerState, x: number, y: number): boolean {
-    if (p.cheat === 'griefer') return true;
     const rule = this.pvpRule(x, y);
+    // Safe means safe: even griefers can't attack in towns and safe zones.
+    if (rule === 'none') return false;
+    if (p.cheat === 'griefer') return true;
     return rule === 'open' || (rule === 'flagged' && getBehavior(p.behavior).weights.pvp > 0);
   }
 
   isSafe(x: number, y: number): boolean {
-    return this.world.entities.list('regions').some((r) => getRegionType(r.type).safe && x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h);
+    return this.world.safeAt(x, y);
   }
 
   /** Spawn areas worth hunting for this player, best first. */
@@ -188,6 +193,10 @@ export class PlayerBrain {
     let best = safe[0];
     let bd = Infinity;
     for (const r of safe) { const d = Math.hypot(r.x + r.w / 2 - a.x, r.y + r.h / 2 - a.y); if (d < bd) { bd = d; best = r; } }
+    // Painted towns and safe zones count too.
+    let tile: { x: number; y: number } | null = null;
+    for (const id of [1, 2]) for (const t of this.world.zoneTiles(id)) { const d = Math.hypot(t.x - a.x, t.y - a.y) + (id === 2 ? 6 : 0); if (d < bd) { bd = d; tile = t; } }
+    if (tile) return { x: tile.x + 0.5, y: tile.y + 0.5 };
     if (best) {
       const p = this.actors.randomWalkableNear(best.x + best.w / 2, best.y + best.h / 2, Math.min(best.w, best.h) / 3);
       if (p) return p;

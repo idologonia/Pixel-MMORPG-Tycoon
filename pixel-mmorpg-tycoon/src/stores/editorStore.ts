@@ -1,3 +1,4 @@
+import { getBiome } from '@/data/biomes';
 import { create } from 'zustand';
 import type { EntityId } from '@/core/ids';
 import type { NpcType } from '@/data/npcTypes';
@@ -12,9 +13,9 @@ export type EditorTab = 'map' | 'npc' | 'creatures' | 'economy' | 'items' | 'que
 export type EditorTool =
   | 'brush' | 'fill' | 'rect' | 'picker'
   | 'select' | 'place-object' | 'erase-object'
-  | 'region' | 'npc' | 'spawn-area' | 'waypoint' | 'lair';
+  | 'region' | 'npc' | 'spawn-area' | 'waypoint' | 'lair' | 'scatter' | 'zone';
 
-export type LeftSection = 'terrain' | 'objects' | 'regions' | 'npc' | 'creatures' | 'spawns';
+export type LeftSection = 'terrain' | 'objects' | 'regions' | 'npc' | 'creatures' | 'spawns' | 'zones';
 
 export interface HoverInfo { x: number; y: number; terrain: number }
 
@@ -37,6 +38,18 @@ interface EditorState {
   setInterior: (id: string | null) => void;
   /** Boss preset placed by the lair tool. */
   bossPreset: string;
+  /** Scatter brush: biome, share of tiles that get an object, paint the ground too. */
+  biome: string;
+  density: number;
+  biomeGround: boolean;
+  /** Zone brush: zone id (0 = erase) and the monster for monster zones (null = by distance). */
+  zone: number;
+  zoneTemplate: EntityId | null;
+  setBiome: (k: string) => void;
+  setDensity: (d: number) => void;
+  setBiomeGround: (v: boolean) => void;
+  setZone: (z: number) => void;
+  setZoneTemplate: (id: EntityId | null) => void;
   selection: Selection | null;
   /** Simulated player shown in the inspector (and followed by the camera). */
   focusPlayer: string | null;
@@ -82,6 +95,11 @@ const initial = {
   npcType: 'villager' as NpcType,
   templateId: null,
   bossPreset: 'goblin_king',
+  biome: 'forest',
+  density: 0.35,
+  biomeGround: true,
+  zone: 1,
+  zoneTemplate: null,
   interiorId: null,
   dungeonId: null,
   selection: null,
@@ -109,6 +127,11 @@ export const useEditorStore = create<EditorState>((set) => ({
   setBossPreset: (bossPreset) => set({ bossPreset, tool: 'lair' }),
   setInterior: (interiorId) => set({ interiorId }),
   setDungeon: (dungeonId) => set({ dungeonId }),
+  setBiome: (biome) => set({ biome, density: getBiome(biome).density, tool: 'scatter' }),
+  setDensity: (density) => set({ density }),
+  setBiomeGround: (biomeGround) => set({ biomeGround }),
+  setZone: (zone) => set({ zone, tool: 'zone' }),
+  setZoneTemplate: (zoneTemplate) => set({ zoneTemplate }),
   select: (selection) => set(selection && selection.ids.length ? { selection, focusPlayer: null, followPlayer: false } : { selection: null }),
   setFocusPlayer: (focusPlayer) => set(focusPlayer ? { focusPlayer, selection: null } : { focusPlayer: null, followPlayer: false }),
   setFollowPlayer: (followPlayer) => set({ followPlayer }),

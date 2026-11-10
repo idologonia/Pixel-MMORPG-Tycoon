@@ -46,7 +46,7 @@ export class ActorManager {
   errandHandler: ((a: Actor) => void) | null = null;
   private unsub: () => void;
 
-  constructor(private world: WorldRuntime, seed = Date.now() & 0x7fffffff) {
+  constructor(readonly world: WorldRuntime, seed = Date.now() & 0x7fffffff) {
     this.rng = new SeededRandom(seed);
     this.pathfinder = new Pathfinder(world.nav);
     this.syncAll();

@@ -29,6 +29,20 @@ export class TileEditCommand implements EditorCommand {
   }
 }
 
+/** Zone painting (one stroke = one undo step). */
+export class ZoneEditCommand implements EditorCommand {
+  constructor(readonly label: string, private indices: Uint32Array, private before: Uint8Array, private after: Uint8Array) {}
+  get size(): number {
+    return this.indices.length;
+  }
+  undo(world: WorldRuntime): void {
+    world.setZones(this.indices, this.before);
+  }
+  redo(world: WorldRuntime): void {
+    world.setZones(this.indices, this.after);
+  }
+}
+
 /** Whole-map replacement (resize, regenerate). */
 export class ReplaceMapCommand implements EditorCommand {
   constructor(readonly label: string, private before: TileGrid, private after: TileGrid) {}

@@ -184,6 +184,18 @@ export class EntityEditor {
     return ok.length ? area : null;
   }
 
+  /** Monster-zone brush: a spawn area that belongs to the painted zone. */
+  addZoneSpawn(templateId: EntityId, r: TileRect, mergeKey?: string): SpawnArea | null {
+    const tpl = this.rt.entities.get('creatureTemplates', templateId);
+    if (!tpl) return null;
+    const area: SpawnArea = { id: createId('spawn'), name: tr('{name} area', { name: tpl.name }), templateId, ...r, maxCount: 3, zone: true };
+    return this.commit(tr('Paint zones'), [this.rt.entities.add('spawnAreas', area)], mergeKey).length ? area : null;
+  }
+
+  removeZoneSpawn(id: EntityId, mergeKey?: string): void {
+    this.commit(tr('Paint zones'), [this.rt.entities.remove('spawnAreas', id)], mergeKey);
+  }
+
   /** Raid boss template from a preset (loot resolved against this world's items). */
   static makeBossTemplate(presetKey: string, items: ItemDef[]): CreatureTemplate {
     const b = getBossPreset(presetKey);

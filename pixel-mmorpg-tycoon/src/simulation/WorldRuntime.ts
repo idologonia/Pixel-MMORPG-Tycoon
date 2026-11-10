@@ -20,6 +20,7 @@ export type RuntimeEvents = {
   'rpg:changed': undefined;
   /** Studio funds/tier/settings changed. */
   'studio:changed': undefined;
+  'zones:changed': undefined;
   'studio:released': { key: string };
 };
 
@@ -28,6 +29,9 @@ export type RuntimeEvents = {
  * too hot for React state (the tile grid, the clock). Phaser renders from it,
  * editor systems mutate it, the simulation advances it, persistence snapshots it.
  */
+/** Region types where nobody may be attacked. */
+const SAFE_REGIONS = new Set(['village', 'town', 'city', 'safezone']);
+
 export class WorldRuntime {
   readonly events = new EventBus<RuntimeEvents>();
   id: EntityId;
@@ -35,6 +39,8 @@ export class WorldRuntime {
   createdAt: number;
   config: WorldConfig;
   grid: TileGrid;
+  /** Painted zone layer (see data/zones). */
+  zones: TileGrid;
   clock: WorldClockState;
   camera?: CameraState;
   readonly entities: EntityStore;
@@ -60,6 +66,7 @@ export class WorldRuntime {
     this.createdAt = save.createdAt;
     this.config = { ...save.config };
     this.grid = TileGrid.fromRle(save.map.width, save.map.height, save.map.tilesRle);
+    this.zones = save.map.zonesRle ? TileGrid.fromRle(save.map.width, save.map.height, save.map.zonesRle) : new TileGrid(save.map.width, save.map.height);
     this.clock = { ...save.clock };
     this.camera = save.camera ? { ...save.camera } : undefined;
     this.entities = new EntityStore(save.entities);
@@ -75,7 +82,7 @@ export class WorldRuntime {
       }
       this.markDirty();
     });
-    this.events.on('tiles:changed', () => this.nav.invalidate());
+    this.events.on('tiles:changed', () => { this.nav.invalidate(); this.zoneCache.clear(); });
     this.events.on('map:replaced', () => {
       this.objectIndex.invalidate();
       this.nav.invalidate();
@@ -109,8 +116,46 @@ export class WorldRuntime {
     }
   }
 
+  /** Paint zones (undoable via ZoneEditCommand). */
+  setZones(indices: ArrayLike<number>, values: ArrayLike<number>): void {
+    const z = this.zones.tiles;
+    for (let i = 0; i < indices.length; i++) z[indices[i]] = values[i];
+    if (indices.length > 0) {
+      this.zoneCache.clear();
+      this.events.emit('zones:changed', undefined);
+      this.markDirty();
+    }
+  }
+
+  private zoneCache = new Map<number, { x: number; y: number }[]>();
+  /** Walkable tiles of a painted zone (sampled every 2 tiles), cached until zones change. */
+  zoneTiles(id: number): { x: number; y: number }[] {
+    let out = this.zoneCache.get(id);
+    if (!out) {
+      out = [];
+      const z = this.zones;
+      for (let y = 0; y < z.height; y += 2) for (let x = 0; x < z.width; x += 2) if (z.tiles[z.index(x, y)] === id && this.nav.isWalkable(x, y)) out.push({ x, y });
+      this.zoneCache.set(id, out);
+    }
+    return out;
+  }
+
+  zoneAt(x: number, y: number): number {
+    return this.zones.inBounds(x, y) ? this.zones.tiles[this.zones.index(x, y)] : 0;
+  }
+
+  /** Nobody may attack players here and monsters don't follow: towns and safe zones (painted or regions). */
+  safeAt(x: number, y: number): boolean {
+    const z = this.zoneAt(x, y);
+    if (z === 1 || z === 2) return true;
+    if (z === 4) return false;
+    for (const r of this.entities.list('regions')) if (x >= r.x && y >= r.y && x < r.x + r.w && y < r.y + r.h && SAFE_REGIONS.has(r.type)) return true;
+    return false;
+  }
+
   replaceGrid(grid: TileGrid): void {
     this.grid = grid;
+    if (this.zones.width !== grid.width || this.zones.height !== grid.height) { this.zones = new TileGrid(grid.width, grid.height); this.events.emit('zones:changed', undefined); }
     this.events.emit('map:replaced', { grid });
     this.markDirty();
   }
@@ -129,7 +174,7 @@ export class WorldRuntime {
       createdAt: this.createdAt,
       updatedAt: Date.now(),
       config: { ...this.config },
-      map: { width: this.grid.width, height: this.grid.height, tilesRle: this.grid.toRle() },
+      map: { width: this.grid.width, height: this.grid.height, tilesRle: this.grid.toRle(), ...(this.zones.tiles.some((v) => v) ? { zonesRle: this.zones.toRle() } : {}) },
       clock: { ...this.clock },
       camera: this.camera ? { ...this.camera } : undefined,
       entities: this.entities.toJSON(),

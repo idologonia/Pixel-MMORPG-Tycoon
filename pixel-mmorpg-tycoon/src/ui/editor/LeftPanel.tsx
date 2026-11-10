@@ -13,11 +13,14 @@ import { TerrainSwatch } from '../components/TilePreview';
 import { useEntityList } from '../hooks/useEntities';
 import { LAIR_BASE_COST, LAIR_COST_PER_RAIDER, MONSTER_SLOT_COST, NPC_HIRE_COST, NPC_UPKEEP_PER_DAY, OBJECT_COST } from '@/data/studio';
 import { BOSS_PRESETS } from '@/data/bossTypes';
+import { BIOMES } from '@/data/biomes';
+import { getZone, ZONES } from '@/data/zones';
 
 const SECTIONS: { key: LeftSection; label: string }[] = [
   { key: 'terrain', label: 'Terrain' },
   { key: 'objects', label: 'Objects' },
   { key: 'regions', label: 'Regions' },
+  { key: 'zones', label: 'Zones' },
   { key: 'npc', label: 'NPC' },
   { key: 'creatures', label: 'Creatures' },
   { key: 'spawns', label: 'Spawns' },
@@ -53,6 +56,7 @@ export function LeftPanel({ session }: { session: GameSession }) {
       {ed.section === 'terrain' && <TerrainSection />}
       {ed.section === 'objects' && <ObjectsSection standard={session.studio.standard} />}
       {ed.section === 'regions' && <RegionsSection session={session} />}
+      {ed.section === 'zones' && <ZonesSection session={session} />}
       {ed.section === 'npc' && <NpcSection session={session} />}
       {ed.section === 'creatures' && <CreaturesSection session={session} />}
       {ed.section === 'spawns' && <SpawnsSection session={session} />}
@@ -73,18 +77,7 @@ function TerrainSection() {
         ))}
       </div>
       {active && <div className="hint">{tr(active.hint)}</div>}
-      {ed.tool === 'brush' && (
-        <>
-          <div className="field">
-            <label>{tr('Brush size')}: {ed.brushSize} <span className="hint">([ / ])</span></label>
-            <input type="range" min={1} max={MAX_BRUSH} value={ed.brushSize} onChange={(e) => ed.setBrushSize(+e.target.value)} />
-          </div>
-          <div className="chip-row">
-            <button className={`btn small ${ed.brushShape === 'square' ? 'active' : ''}`} onClick={() => ed.setBrushShape('square')}>{tr('Square')}</button>
-            <button className={`btn small ${ed.brushShape === 'circle' ? 'active' : ''}`} onClick={() => ed.setBrushShape('circle')}>{tr('Circle')}</button>
-          </div>
-        </>
-      )}
+      {ed.tool === 'brush' && <BrushControls />}
       {ed.tool === 'rect' && <label className="check"><input type="checkbox" checked={ed.rectOutline} onChange={(e) => ed.setRectOutline(e.target.checked)} /> {tr('Outline only')}</label>}
       <div className="terrain-list">
         {TERRAINS.map((t) => (
@@ -106,6 +99,25 @@ function ObjectsSection({ standard }: { standard: boolean }) {
   const items = OBJECTS.filter((o) => o.category === cat);
   return (
     <div className="section">
+      <div className="el-title">{tr('Landscape brush')}</div>
+      <div className="hint">{tr('Paint a whole forest, mountains or a graveyard at once: the brush scatters a mix of fitting objects.')}</div>
+      <div className="region-types">
+        {BIOMES.map((b) => (
+          <button key={b.key} className={`btn small ${ed.tool === 'scatter' && ed.biome === b.key ? 'active' : ''}`} onClick={() => ed.setBiome(b.key)}>{tr(b.name)}</button>
+        ))}
+      </div>
+      {ed.tool === 'scatter' && (
+        <>
+          <BrushControls />
+          <div className="field">
+            <label>{tr('Density')}: {Math.round(ed.density * 100)}%</label>
+            <input type="range" min={5} max={70} value={Math.round(ed.density * 100)} onChange={(e) => ed.setDensity(+e.target.value / 100)} />
+          </div>
+          <label className="check"><input type="checkbox" checked={ed.biomeGround} onChange={(e) => ed.setBiomeGround(e.target.checked)} /> {tr('Paint the ground too')}</label>
+          {standard && <div className="hint cost-line">{tr('Every object costs money, as if placed by hand.')}</div>}
+        </>
+      )}
+      <div className="el-title">{tr('Single objects')}</div>
       <div className="chip-row">
         {OBJECT_CATEGORIES.map((c) => (
           <button key={c.key} className={`btn small ${cat === c.key ? 'active' : ''}`} onClick={() => setCat(c.key)}>{tr(c.label)}</button>
@@ -132,7 +144,7 @@ function RegionsSection({ session }: { session: GameSession }) {
     <div className="section">
       <div className="hint">{tr('Pick a type, then drag on the map to draw the region.')}</div>
       <div className="region-types">
-        {REGION_TYPES.map((t) => (
+        {REGION_TYPES.filter((t) => t.key !== 'wilderness').map((t) => (
           <button key={t.key} title={tr(t.description)} className={`btn small ${ed.tool === 'region' && ed.regionType === t.key ? 'active' : ''}`} onClick={() => ed.setRegionType(t.key)}>
             <span className="swatch" style={{ background: `#${t.color.toString(16).padStart(6, '0')}` }} /> {tr(t.name)}
           </button>
@@ -148,6 +160,54 @@ function RegionsSection({ session }: { session: GameSession }) {
         col="regions"
         session={session}
       />
+    </div>
+  );
+}
+
+/** Brush size + shape, shared by the terrain, landscape and zone brushes. */
+function BrushControls() {
+  const ed = useEditorStore();
+  return (
+    <>
+      <div className="field">
+        <label>{tr('Brush size')}: {ed.brushSize} <span className="hint">([ / ])</span></label>
+        <input type="range" min={1} max={MAX_BRUSH} value={ed.brushSize} onChange={(e) => ed.setBrushSize(+e.target.value)} />
+      </div>
+      <div className="chip-row">
+        <button className={`btn small ${ed.brushShape === 'square' ? 'active' : ''}`} onClick={() => ed.setBrushShape('square')}>{tr('Square')}</button>
+        <button className={`btn small ${ed.brushShape === 'circle' ? 'active' : ''}`} onClick={() => ed.setBrushShape('circle')}>{tr('Circle')}</button>
+      </div>
+    </>
+  );
+}
+
+function ZonesSection({ session }: { session: GameSession }) {
+  const ed = useEditorStore();
+  const templates = useEntityList(session, 'creatureTemplates').filter((c) => !c.boss);
+  const cur = getZone(ed.zone);
+  return (
+    <div className="section">
+      <div className="hint">{tr('Paint zones on the map like terrain. Painted zones work on top of regions.')}</div>
+      <div className="region-types">
+        {ZONES.map((z) => (
+          <button key={z.id} title={tr(z.hint)} className={`btn small ${ed.tool === 'zone' && ed.zone === z.id ? 'active' : ''}`} onClick={() => ed.setZone(z.id)}>
+            <span className="swatch" style={{ background: `#${z.color.toString(16).padStart(6, '0')}` }} /> {tr(z.name)}
+          </button>
+        ))}
+        <button className={`btn small ${ed.tool === 'zone' && ed.zone === 0 ? 'active' : ''}`} onClick={() => ed.setZone(0)}>✕ {tr('Erase zone')}</button>
+      </div>
+      <div className="hint region-desc">{cur ? <><b>{tr(cur.name)}:</b> {tr(cur.hint)}</> : tr('Removes painted zones (and the monsters of erased monster zones).')}</div>
+      <BrushControls />
+      {ed.zone === 3 && (
+        <div className="field">
+          <label>{tr('Monster')}</label>
+          <select className="input" value={ed.zoneTemplate ?? ''} onChange={(e) => ed.setZoneTemplate(e.target.value || null)}>
+            <option value="">{tr('Automatic: tougher farther from the spawn')}</option>
+            {templates.map((c) => <option key={c.id} value={c.id}>{c.name} · {tr('Lv')} {c.level}</option>)}
+          </select>
+          {session.studio.standard && <div className="hint cost-line">{tr('Each 8×8 piece of the zone gets 3 monsters')} · ${3 * MONSTER_SLOT_COST}</div>}
+        </div>
+      )}
     </div>
   );
 }

@@ -38,6 +38,8 @@ export interface SerializedMap {
   width: number;
   height: number;
   tilesRle: string;
+  /** Painted zones (town, safe, monsters, PvP), same RLE format. */
+  zonesRle?: string;
 }
 
 /** Full, serializable world snapshot. Everything a world needs to be restored. */
