@@ -12,7 +12,8 @@ import { getZone } from '@/data/zones';
 import type { GameSession } from '@/session/GameSession';
 import { displayName } from '@/simulation/actors/combat';
 import type { Selection } from '@/systems/editor/EntityEditor';
-import { brushFootprint, normalizeRect, type TileRect } from '@/systems/editor/shapes';
+import { brushFootprint, lineTiles, normalizeRect, type TileRect } from '@/systems/editor/shapes';
+import { inArea } from '@/simulation/spawnShape';
 import { useEditorStore } from '@/stores/editorStore';
 import { log } from '@/stores/logStore';
 import { audio } from '@/audio/AudioEngine';
@@ -96,7 +97,7 @@ export class MapTools {
     const o = this.rt.objectIndex.objectAt(tx, ty);
     if (o) return { col: 'objects', id: o.id };
     const inR = (r: TileRect) => tx >= r.x && ty >= r.y && tx < r.x + r.w && ty < r.y + r.h;
-    const area = this.rt.entities.list('spawnAreas').find(inR);
+    const area = this.rt.entities.list('spawnAreas').find((a) => inArea(a, tx, ty));
     if (area) return { col: 'spawnAreas', id: area.id };
     const reg = this.rt.entities.list('regions').filter(inR).sort((a, b) => a.w * a.h - b.w * b.h)[0];
     if (reg) return { col: 'regions', id: reg.id };
@@ -135,9 +136,13 @@ export class MapTools {
       case 'picker':
         if (inMap) { ed.setTerrain(grid.get(t.x, t.y)); ed.setTool('brush'); }
         break;
+      case 'spawn-area':
+        if (!ed.spawnErase && (!ed.templateId || !this.rt.entities.get('creatureTemplates', ed.templateId))) { toast(tr('Pick a creature first'), 'error'); break; }
+        this.spawnStroke = new Set();
+        this.addSpawnStroke(t.x, t.y);
+        break;
       case 'rect':
       case 'region':
-      case 'spawn-area':
         this.dragRect = { x: t.x, y: t.y };
         break;
       case 'lair': {
@@ -232,6 +237,20 @@ export class MapTools {
   }
   private lastBudgetToast: string | null = null;
   private scattering = false;
+  /** Tiles painted by the current spawn-brush stroke (global indices). */
+  private spawnStroke: Set<number> | null = null;
+  private lastSpawn: [number, number] | null = null;
+
+  private addSpawnStroke(tx: number, ty: number): void {
+    const ed = useEditorStore.getState();
+    const grid = this.rt.grid;
+    const pts = this.lastSpawn ? lineTiles(this.lastSpawn[0], this.lastSpawn[1], tx, ty) : [[tx, ty] as [number, number]];
+    this.lastSpawn = [tx, ty];
+    for (const [px, py] of pts) for (const [dx, dy] of brushFootprint(ed.brushSize, ed.brushShape)) {
+      const x = px + dx, y = py + dy;
+      if (grid.inBounds(x, y)) this.spawnStroke!.add(grid.index(x, y));
+    }
+  }
   private zoning = false;
   private scattered = new Set<number>();
 
@@ -264,6 +283,7 @@ export class MapTools {
     const down = p.leftButtonDown() && !this.cam.spaceHeld;
     if (this.painting && down) this.session.painter.strokeTo(t.x, t.y, ed.brushSize, ed.brushShape);
     if (this.scattering && down) this.scatterAt(t.x, t.y);
+    if (this.spawnStroke && down) this.addSpawnStroke(t.x, t.y);
     if (this.zoning && down) this.session.zonePainter.strokeTo(t.x, t.y, ed.brushSize, ed.brushShape);
     if (down && ed.tool === 'place-object' && this.strokeKey) {
       const d = getObjectDef(ed.objectKind);
@@ -326,6 +346,15 @@ export class MapTools {
       this.session.painter.endStroke(tr('Paint'));
     }
     if (this.scattering) { this.scattering = false; audio.play('place'); }
+    if (this.spawnStroke) {
+      const stroke = this.spawnStroke;
+      this.spawnStroke = null;
+      this.lastSpawn = null;
+      this.session.entities.lastError = null;
+      const n = this.session.entities.paintSpawn(ed.spawnErase ? null : ed.templateId, stroke);
+      if (n) audio.play('place');
+      else if (this.session.entities.lastError) toast(this.session.entities.lastError, 'error');
+    }
     if (this.zoning) {
       this.zoning = false;
       this.session.zonePainter.end(ed.zoneTemplate, this.session.players.spawnPoint());
@@ -442,6 +471,18 @@ export class MapTools {
     if (!grid.inBounds(tx, ty)) return;
 
     switch (ed.tool) {
+      case 'spawn-area': {
+        // Painted-so-far tiles of this stroke, then the brush.
+        const col = ed.spawnErase ? 0x000000 : 0xe2574c;
+        if (this.spawnStroke) {
+          g.fillStyle(col, 0.35);
+          const W = grid.width;
+          for (const i of this.spawnStroke) g.fillRect((i % W) * S, Math.floor(i / W) * S, S, S);
+        }
+        g.fillStyle(col, 0.25);
+        for (const [dx, dy] of brushFootprint(ed.brushSize, ed.brushShape)) g.fillRect((tx + dx) * S, (ty + dy) * S, S, S);
+        break;
+      }
       case 'brush':
       case 'scatter':
       case 'zone': {

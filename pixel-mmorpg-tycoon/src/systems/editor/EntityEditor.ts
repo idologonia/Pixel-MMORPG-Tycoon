@@ -1,3 +1,4 @@
+import { areaTiles, countFor, shapeFrom } from '@/simulation/spawnShape';
 import { createId, type EntityId } from '@/core/ids';
 import { t as tr } from '@/i18n';
 import { getCreatureType, type CreatureType } from '@/data/creatureTypes';
@@ -182,6 +183,49 @@ export class EntityEditor {
     const area: SpawnArea = { id: createId('spawn'), name: tr('{name} area', { name: tpl.name }), templateId, ...r, maxCount: Math.max(1, Math.min(12, Math.round((r.w * r.h) / 24))) };
     const ok = this.commit(tr('Add spawn area'), [this.rt.entities.add('spawnAreas', area)]);
     return ok.length ? area : null;
+  }
+
+  /**
+   * Spawn brush, one stroke = one undo step. With a template: painted tiles join a
+   * touching area of the same monster (merging several if the stroke links them) or
+   * become a new area. Without (eraser): painted tiles are cut out of every area.
+   */
+  paintSpawn(templateId: EntityId | null, stroke: Set<number>): number {
+    const W = this.rt.grid.width;
+    const changes: (EntityChange | null)[] = [];
+    const areas = this.rt.entities.list('spawnAreas').filter((a) => !a.lair && !a.eventId);
+    if (!templateId) {
+      for (const a of areas) {
+        const tiles = areaTiles(a, W);
+        let hit = false;
+        for (const i of stroke) if (tiles.delete(i)) hit = true;
+        if (!hit) continue;
+        const shape = shapeFrom(tiles, W);
+        changes.push(shape ? this.rt.entities.update('spawnAreas', a.id, { ...shape, maxCount: countFor(tiles.size) }) : this.rt.entities.remove('spawnAreas', a.id));
+      }
+      return this.commit(tr('Erase spawn area'), changes).length;
+    }
+    const tpl = this.rt.entities.get('creatureTemplates', templateId);
+    if (!tpl) return 0;
+    // Areas of this monster the stroke touches (or comes within one tile of).
+    const near = new Set<number>();
+    for (const i of stroke) for (const d of [0, 1, -1, W, -W]) near.add(i + d);
+    const touching = areas.filter((a) => a.templateId === templateId && [...areaTiles(a, W)].some((i) => near.has(i)));
+    const tiles = new Set(stroke);
+    for (const a of touching) for (const i of areaTiles(a, W)) tiles.add(i);
+    // Only walkable tiles count.
+    for (const i of [...tiles]) if (!this.rt.nav.isWalkable(i % W, Math.floor(i / W))) tiles.delete(i);
+    const shape = shapeFrom(tiles, W);
+    if (!shape) return 0;
+    if (touching.length) {
+      const [keep, ...rest] = touching;
+      changes.push(this.rt.entities.update('spawnAreas', keep.id, { ...shape, maxCount: Math.max(countFor(tiles.size), Math.min(15, keep.maxCount)) }));
+      for (const a of rest) changes.push(this.rt.entities.remove('spawnAreas', a.id));
+    } else {
+      const area: SpawnArea = { id: createId('spawn'), name: tr('{name} area', { name: tpl.name }), templateId, ...shape, maxCount: countFor(tiles.size) };
+      changes.push(this.rt.entities.add('spawnAreas', area));
+    }
+    return this.commit(tr('Paint spawn area'), changes).length;
   }
 
   /** Monster-zone brush: a spawn area that belongs to the painted zone. */

@@ -155,9 +155,12 @@ export class ActorManager {
   }
 
   randomTileInArea(area: SpawnArea): { x: number; y: number } | null {
+    const cells = (area as { cells?: number[] }).cells;
     for (let i = 0; i < 30; i++) {
-      const x = area.x + Math.floor(this.rand() * area.w);
-      const y = area.y + Math.floor(this.rand() * area.h);
+      // Painted areas: pick one of the painted cells.
+      const c = cells?.length ? cells[Math.floor(this.rand() * cells.length)] : -1;
+      const x = c >= 0 ? area.x + (c % area.w) : area.x + Math.floor(this.rand() * area.w);
+      const y = c >= 0 ? area.y + Math.floor(c / area.w) : area.y + Math.floor(this.rand() * area.h);
       if (this.world.nav.isWalkable(x, y)) return { x, y };
     }
     return null;

@@ -97,6 +97,8 @@ export interface SpawnArea {
   w: number;
   h: number;
   maxCount: number;
+  /** Painted shape: cells inside the rectangle (local index ly * w + lx). Missing = whole rectangle. */
+  cells?: number[];
   /** Made by the monster-zone brush (removed when the zone is erased). */
   zone?: boolean;
   /** Created by a world event; removed when the event ends (free of charge). */

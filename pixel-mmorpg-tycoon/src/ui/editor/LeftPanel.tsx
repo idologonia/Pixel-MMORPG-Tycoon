@@ -189,7 +189,7 @@ function ZonesSection({ session }: { session: GameSession }) {
     <div className="section">
       <div className="hint">{tr('Paint zones on the map like terrain. Painted zones work on top of regions.')}</div>
       <div className="region-types">
-        {ZONES.map((z) => (
+        {ZONES.filter((z) => z.id !== 3).map((z) => (
           <button key={z.id} title={tr(z.hint)} className={`btn small ${ed.tool === 'zone' && ed.zone === z.id ? 'active' : ''}`} onClick={() => ed.setZone(z.id)}>
             <span className="swatch" style={{ background: `#${z.color.toString(16).padStart(6, '0')}` }} /> {tr(z.name)}
           </button>
@@ -198,6 +198,7 @@ function ZonesSection({ session }: { session: GameSession }) {
       </div>
       <div className="hint region-desc">{cur ? <><b>{tr(cur.name)}:</b> {tr(cur.hint)}</> : tr('Removes painted zones (and the monsters of erased monster zones).')}</div>
       <BrushControls />
+      <div className="hint">{tr('Monsters are painted in the Creatures section with the spawn brush.')}</div>
       {ed.zone === 3 && (
         <div className="field">
           <label>{tr('Monster')}</label>
@@ -238,12 +239,18 @@ function CreaturesSection({ session }: { session: GameSession }) {
   const [newType, setNewType] = useState<CreatureType>('slime');
   return (
     <div className="section">
-      <div className="hint">{tr('Pick a creature, then drag on the map to draw its spawn area.')}</div>
+      <div className="hint">{tr('Pick a creature, then paint its spawn area with the brush. Paint next to an area of the same creature to grow it; the eraser cuts areas down.')}</div>
+      {ed.tool === 'spawn-area' && (
+        <>
+          <BrushControls />
+          <button className={`btn small ${ed.spawnErase ? 'active' : ''}`} onClick={() => ed.setSpawnErase(!ed.spawnErase)}>✕ {tr('Spawn eraser')}</button>
+        </>
+      )}
       {session.studio.standard && <div className="hint cost-line">{tr('Monster slot')}: ${MONSTER_SLOT_COST}</div>}
       {templates.length === 0 && <div className="hint">{tr('No creatures yet — create one below.')}</div>}
       <div className="sprite-grid">
         {templates.map((t) => (
-          <button key={t.id} className={`sprite-btn ${ed.tool === 'spawn-area' && ed.templateId === t.id ? 'active' : ''}`} onClick={() => { ed.setTemplateId(t.id); ed.setTool('spawn-area'); }} title={`${t.name} · ${tr('Lv')} ${t.level}`}>
+          <button key={t.id} className={`sprite-btn ${ed.tool === 'spawn-area' && !ed.spawnErase && ed.templateId === t.id ? 'active' : ''}`} onClick={() => { ed.setTemplateId(t.id); ed.setTool('spawn-area'); }} title={`${t.name} · ${tr('Lv')} ${t.level}`}>
             <SpritePreview frame={`cr:${t.type}:0`} box={32} />
             <span>{t.name} <b className="count">{tr('Lv')}{t.level}</b></span>
           </button>

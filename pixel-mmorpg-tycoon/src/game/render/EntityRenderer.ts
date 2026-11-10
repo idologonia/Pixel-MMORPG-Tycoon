@@ -1,3 +1,4 @@
+import { inArea } from '@/simulation/spawnShape';
 import { getZone } from '@/data/zones';
 import Phaser from 'phaser';
 import { canvasFont, onLangChange, t } from '@/i18n';
@@ -455,8 +456,21 @@ export class EntityRenderer {
         const tpl = rt.entities.get('creatureTemplates', a.templateId);
         const selA = isSel('spawnAreas', a.id);
         o.lineStyle(selA ? 3 : 2, 0xe2574c, selA ? 1 : 0.8);
-        this.dashedRect(o, a.x * S, a.y * S, a.w * S, a.h * S);
-        if (selA) o.fillStyle(0xe2574c, 0.08).fillRect(a.x * S, a.y * S, a.w * S, a.h * S);
+        if (a.cells) {
+          // Painted shape: tinted cells with a border along the outside edges.
+          o.fillStyle(0xe2574c, selA ? 0.16 : 0.08);
+          for (const c of a.cells) {
+            const x = a.x + (c % a.w), y = a.y + Math.floor(c / a.w);
+            o.fillRect(x * S, y * S, S, S);
+            if (!inArea(a, x, y - 1)) o.lineBetween(x * S, y * S, (x + 1) * S, y * S);
+            if (!inArea(a, x, y + 1)) o.lineBetween(x * S, (y + 1) * S, (x + 1) * S, (y + 1) * S);
+            if (!inArea(a, x - 1, y)) o.lineBetween(x * S, y * S, x * S, (y + 1) * S);
+            if (!inArea(a, x + 1, y)) o.lineBetween((x + 1) * S, y * S, (x + 1) * S, (y + 1) * S);
+          }
+        } else {
+          this.dashedRect(o, a.x * S, a.y * S, a.w * S, a.h * S);
+          if (selA) o.fillStyle(0xe2574c, 0.08).fillRect(a.x * S, a.y * S, a.w * S, a.h * S);
+        }
         label(`${tpl?.name ?? '?'} ×${a.maxCount}`, a.x * S + 4, (a.y + a.h) * S - 18, '#ff9a8a');
       }
     }

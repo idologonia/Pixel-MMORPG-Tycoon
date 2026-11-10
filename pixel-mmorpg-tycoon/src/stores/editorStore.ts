@@ -45,6 +45,9 @@ interface EditorState {
   /** Zone brush: zone id (0 = erase) and the monster for monster zones (null = by distance). */
   zone: number;
   zoneTemplate: EntityId | null;
+  /** Spawn brush erases instead of painting. */
+  spawnErase: boolean;
+  setSpawnErase: (v: boolean) => void;
   setBiome: (k: string) => void;
   setDensity: (d: number) => void;
   setBiomeGround: (v: boolean) => void;
@@ -100,6 +103,7 @@ const initial = {
   biomeGround: true,
   zone: 1,
   zoneTemplate: null,
+  spawnErase: false,
   interiorId: null,
   dungeonId: null,
   selection: null,
@@ -123,7 +127,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   setObjectKind: (objectKind) => set({ objectKind, tool: 'place-object' }),
   setRegionType: (regionType) => set({ regionType, tool: 'region' }),
   setNpcType: (npcType) => set({ npcType, tool: 'npc' }),
-  setTemplateId: (templateId) => set({ templateId }),
+  setTemplateId: (templateId) => set({ templateId, spawnErase: false }),
   setBossPreset: (bossPreset) => set({ bossPreset, tool: 'lair' }),
   setInterior: (interiorId) => set({ interiorId }),
   setDungeon: (dungeonId) => set({ dungeonId }),
@@ -132,6 +136,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   setBiomeGround: (biomeGround) => set({ biomeGround }),
   setZone: (zone) => set({ zone, tool: 'zone' }),
   setZoneTemplate: (zoneTemplate) => set({ zoneTemplate }),
+  setSpawnErase: (spawnErase) => set({ spawnErase, tool: 'spawn-area' }),
   select: (selection) => set(selection && selection.ids.length ? { selection, focusPlayer: null, followPlayer: false } : { selection: null }),
   setFocusPlayer: (focusPlayer) => set(focusPlayer ? { focusPlayer, selection: null } : { focusPlayer: null, followPlayer: false }),
   setFollowPlayer: (followPlayer) => set({ followPlayer }),

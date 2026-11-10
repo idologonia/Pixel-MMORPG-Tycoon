@@ -1,3 +1,4 @@
+import { areaSize } from '@/simulation/spawnShape';
 import { DUNGEON_KINDS } from '@/simulation/social/DungeonService';
 import { BUILDING_ROLE, NPC_HOUSED_HINT, NPC_STREET_HINT, SERVICE_BUILDING, serviceBuilding } from '@/data/buildings';
 import { ENTERABLE } from '@/data/furniture';
@@ -202,10 +203,9 @@ function SpawnAreaInspector({ session, id, actions }: { session: GameSession; id
       </Field>
       <div className="two-col">
         <Field label={t('Max alive')}><NumberInput value={a.maxCount} min={0} max={50} onChange={(maxCount) => up({ maxCount })} /></Field>
-        <Field label={t('Size')}>
-          <div className="row"><NumberInput value={a.w} min={1} max={session.runtime.grid.width - a.x} onChange={(w) => up({ w }, t('Resize spawn area'))} />×<NumberInput value={a.h} min={1} max={session.runtime.grid.height - a.y} onChange={(h) => up({ h }, t('Resize spawn area'))} /></div>
-        </Field>
+        <Field label={t('Tiles')}><div className="kv"><span>{areaSize(a)}</span></div></Field>
       </div>
+      <button className="btn small primary" onClick={() => { const st = useEditorStore.getState(); st.setSection('creatures'); st.setTemplateId(a.templateId); st.setTool('spawn-area'); }}>{t('Edit with the brush')}</button>
       <div className="kv"><span>{t('Alive now')}</span><span>{alive} / {members.length}</span></div>
       <div className="kv"><span>{t('Waiting to respawn')}</span><span>{members.length - alive}</span></div>
       {actions}

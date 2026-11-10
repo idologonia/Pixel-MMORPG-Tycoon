@@ -1997,4 +1997,10 @@ export const uk: Record<string, string> = {
   "Nobody can attack players here, monsters give up the chase at the border. Good for roads.": "Тут нікого не можна атакувати, монстри кидають погоню на межі. Добре для доріг.",
   "Monsters live here: groups of the chosen monster appear wherever you paint.": "Тут живуть монстри: де малюєте, там з'являються групи обраного монстра.",
   "Battleground: everyone inside fights everyone.": "Поле бою: усі б'ються з усіма.",
+  "Erase spawn area": "Стерти зону спавну",
+  "Paint spawn area": "Малювати зону спавну",
+  "Monsters are painted in the Creatures section with the spawn brush.": "Монстрів малюють у розділі «Монстри» пензлем зони спавну.",
+  "Pick a creature, then paint its spawn area with the brush. Paint next to an area of the same creature to grow it; the eraser cuts areas down.": "Оберіть монстра й малюйте його зону спавну пензлем. Малюйте поруч із зоною того ж монстра, щоб її розширити; гумка зрізає зони.",
+  "Spawn eraser": "Гумка спавну",
+  "Edit with the brush": "Редагувати пензлем",
 };
