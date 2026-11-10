@@ -18,6 +18,7 @@ import {
   TILE_MARGIN,
   TILE_SPACING,
   tileIndexFor,
+  tileLook,
   tilesetSize,
 } from '../textures/TilesetPainter';
 
@@ -110,6 +111,7 @@ export class WorldScene extends Phaser.Scene {
     const tileset = this.map.addTilesetImage('terrain', TILESET_KEY, TILE_SIZE, TILE_SIZE, TILE_MARGIN, TILE_SPACING)!;
     this.layer = this.map.createLayer(0, tileset, 0, 0)!;
     this.layer.setDepth(0);
+    for (let y = 0; y < grid.height; y++) for (let x = 0; x < grid.width; x++) this.styleTile(this.layer.getTileAt(x, y), grid.tiles[y * grid.width + x], x, y);
 
     const { w, h } = this.mapPixelSize();
     this.night.setSize(w, h);
@@ -127,8 +129,18 @@ export class WorldScene extends Phaser.Scene {
       const idx = indices[i];
       const x = idx % grid.width;
       const y = (idx - x) / grid.width;
-      layer.putTileAt(tileIndexFor(grid.tiles[idx], x, y), x, y);
+      this.styleTile(layer.putTileAt(tileIndexFor(grid.tiles[idx], x, y), x, y), grid.tiles[idx], x, y);
     }
+  }
+
+  /** Random mirroring/rotation + big soft light patches (see tileLook). */
+  private styleTile(tile: Phaser.Tilemaps.Tile | null, terrain: number, x: number, y: number): void {
+    if (!tile) return;
+    const l = tileLook(terrain, x, y);
+    tile.flipX = l.flipX;
+    tile.flipY = l.flipY;
+    tile.rotation = l.rotation;
+    tile.tint = l.tint;
   }
 
   // ---------------------------------------------------------------- session
@@ -209,7 +221,8 @@ export class WorldScene extends Phaser.Scene {
     const g = this.gridGfx;
     g.clear();
     const cam = this.cameras.main;
-    if (!show || cam.zoom < 0.45) return;
+    // The grid helps when zoomed in to edit; zoomed out it turns the map into graph paper.
+    if (!show || cam.zoom < 0.9) return;
     const grid = this.session.runtime.grid;
     const S = TILE_SIZE;
     const v = cam.worldView;
@@ -217,7 +230,7 @@ export class WorldScene extends Phaser.Scene {
     const y0 = Math.max(0, Math.floor(v.y / S));
     const x1 = Math.min(grid.width, Math.ceil(v.right / S));
     const y1 = Math.min(grid.height, Math.ceil(v.bottom / S));
-    g.lineStyle(1 / cam.zoom, 0x000000, cam.zoom < 0.8 ? 0.16 : 0.3);
+    g.lineStyle(1 / cam.zoom, 0x000000, Math.min(0.25, 0.1 + (cam.zoom - 0.9) * 0.25));
     for (let x = x0; x <= x1; x++) g.lineBetween(x * S, y0 * S, x * S, y1 * S);
     for (let y = y0; y <= y1; y++) g.lineBetween(x0 * S, y * S, x1 * S, y * S);
   }

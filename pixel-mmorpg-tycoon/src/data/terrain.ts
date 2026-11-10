@@ -39,7 +39,7 @@ export const TERRAINS: readonly TerrainDef[] = [
 export const TERRAIN_COUNT = TERRAINS.length;
 export const TILE_SIZE = 32;
 /** Visual variants per terrain in the generated tileset (breaks up repetition). */
-export const TILE_VARIANTS = 4;
+export const TILE_VARIANTS = 8;
 
 export function getTerrain(id: number): TerrainDef {
   return TERRAINS[id] ?? TERRAINS[0];

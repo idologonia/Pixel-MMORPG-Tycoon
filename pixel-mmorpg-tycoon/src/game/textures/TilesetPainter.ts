@@ -53,6 +53,8 @@ function extrude(ctx: CanvasRenderingContext2D, ox: number, oy: number): void {
 function paintTile(plot: Plot, terrain: TerrainId, variant: number, frame: number): void {
   const [base, dark, light, accent] = TERRAINS[terrain].palette;
   const seed = terrain * 97 + variant * 13 + 1;
+  // 8 variants share 4 detail levels, each with its own random layout.
+  variant %= 4;
   const r = (x: number, y: number, k = 0) => hash2(x, y, seed + k) / 4294967295;
   for (let y = 0; y < ART; y++) for (let x = 0; x < ART; x++) plot(x, y, base);
 
@@ -219,10 +221,40 @@ function paintTile(plot: Plot, terrain: TerrainId, variant: number, frame: numbe
  */
 export function variantFor(x: number, y: number): number {
   const h = hash2(x, y, 4242) % 100;
-  if (h < 40) return 0;
-  if (h < 78) return 1;
-  if (h < 92) return 2;
-  return 3;
+  const odd = hash2(x, y, 999) & 1 ? 4 : 0;
+  if (h < 40) return odd;
+  if (h < 78) return 1 + odd;
+  if (h < 92) return 2 + odd;
+  return 3 + odd;
+}
+
+/** Smooth value noise in 0..1 (cells of `size` tiles). */
+function noise(x: number, y: number, size: number, seed: number): number {
+  const gx = x / size, gy = y / size;
+  const x0 = Math.floor(gx), y0 = Math.floor(gy);
+  const fx = gx - x0, fy = gy - y0;
+  const sx = fx * fx * (3 - 2 * fx), sy = fy * fy * (3 - 2 * fy);
+  const v = (a: number, b: number) => hash2(a, b, seed) / 4294967295;
+  const top = v(x0, y0) + (v(x0 + 1, y0) - v(x0, y0)) * sx;
+  const bot = v(x0, y0 + 1) + (v(x0 + 1, y0 + 1) - v(x0, y0 + 1)) * sx;
+  return top + (bot - top) * sy;
+}
+
+/** Organic ground can be rotated freely; patterned ground (bricks, waves) only mirrored. */
+const ROTATES = new Set<number>([TerrainId.Grass, TerrainId.Dirt, TerrainId.Sand, TerrainId.Snow, TerrainId.Swamp]);
+
+/**
+ * How a map cell is drawn on top of its variant: random mirroring/rotation so the
+ * same tiles don't line up, and a soft light/dark tint in big patches so the map
+ * looks natural from far away instead of like a repeated grid.
+ */
+export function tileLook(terrain: number, x: number, y: number): { flipX: boolean; flipY: boolean; rotation: number; tint: number } {
+  const h = hash2(x, y, 7777);
+  const rot = ROTATES.has(terrain);
+  const n = 0.6 * noise(x, y, 9, 31) + 0.4 * noise(x, y, 3.5, 57);
+  const range = terrain === TerrainId.Water || terrain === TerrainId.Lava ? 0.08 : 0.2;
+  const c = Math.round(255 * (1 - range + range * n));
+  return { flipX: (h & 1) === 1, flipY: rot && (h & 2) === 2, rotation: rot ? ((h >> 2) & 3) * (Math.PI / 2) : 0, tint: (c << 16) | (c << 8) | c };
 }
 
 export function tileIndexFor(terrain: number, x: number, y: number): number {
